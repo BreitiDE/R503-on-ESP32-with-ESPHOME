@@ -1,0 +1,183 @@
+esphome:
+  name: esp32-r503-fingerprint
+  friendly_name: ESP32-R503-Fingerprint
+  platform: ESP32
+  board: nodemcu-32s
+  on_boot:
+    - fingerprint_grow.aura_led_control:
+        state: FLASHING
+        speed: 25
+        color: RED
+        count: 1
+    - fingerprint_grow.aura_led_control:
+        state: FLASHING
+        speed: 25
+        color: YELLOW
+        count: 1
+    - fingerprint_grow.aura_led_control:
+        state: FLASHING
+        speed: 25
+        color: GREEN
+        count: 1
+    - fingerprint_grow.aura_led_control:
+        state: BREATHING
+        speed: 100
+        color: BLUE
+        count: 1
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+#  ap:
+#    ssid: "ESP32-R503-Fingerprint"
+#    password: "<AP_FALLBACK_PASSWORD>"
+
+#captive_portal:
+
+# Enable logging
+logger:
+#  level: DEBUG
+
+ota:
+  password: "<OTA_PASSWORD>"
+
+#web_server:
+#  port: 80
+#  include_internal: true 
+#  version: 2
+#  auth:
+#    username: !secret web_server_username
+#    password: !secret web_server_password
+
+uart:
+  rx_pin: GPIO13
+  tx_pin: GPIO14
+  baud_rate: 57600
+
+fingerprint_grow:
+  sensing_pin: GPIO15
+  on_finger_scan_matched:
+    - text_sensor.template.publish:
+        id: fingerprint_state
+        state: "Fingerabdruck erkannt"
+    - fingerprint_grow.aura_led_control:
+        state: BREATHING
+        speed: 200
+        color: GREEN
+        count: 1
+    - delay: 2000ms
+    - text_sensor.template.publish:
+        id: fingerprint_state
+        state: "warten"
+  on_finger_scan_unmatched:
+    - text_sensor.template.publish:
+        id: fingerprint_state
+        state: "Fingerabdruck unzulässig"
+    - fingerprint_grow.aura_led_control:
+        state: FLASHING
+        speed: 25
+        color: RED
+        count: 2
+  on_finger_scan_misplaced:
+    - text_sensor.template.publish:
+        id: fingerprint_state
+        state: "Finger nicht leesbar"
+    - fingerprint_grow.aura_led_control:
+        state: FLASHING
+        speed: 25
+        color: PURPLE
+        count: 2
+  on_enrollment_scan:
+    - text_sensor.template.publish:
+        id: fingerprint_state
+        state: "Fingerabdruck erkannt"
+    - fingerprint_grow.aura_led_control:
+        state: FLASHING
+        speed: 25
+        color: BLUE
+        count: 2
+  on_enrollment_failed:
+    - text_sensor.template.publish:
+        id: fingerprint_state
+        state: "Fingerabdruckerkennung fehlgeschlagen"
+    - fingerprint_grow.aura_led_control:
+        state: FLASHING
+        speed: 25
+        color: RED
+        count: 4
+
+api:
+  encryption:
+    key: "<API_KEY>"
+  services:
+  - service: enroll
+    variables:
+      finger_id: int
+      num_scans: int
+    then:
+      - fingerprint_grow.enroll:
+          finger_id: !lambda 'return finger_id;'
+          num_scans: !lambda 'return num_scans;'
+  - service: cancel_enroll
+    then:
+      - fingerprint_grow.cancel_enroll:
+  - service: delete
+    variables:
+      finger_id: int
+    then:
+      - fingerprint_grow.delete:
+          finger_id: !lambda 'return finger_id;'
+  - service: delete_all
+    then:
+      - fingerprint_grow.delete_all:
+
+# Optional template text sensor for visual feedback
+text_sensor:
+  - platform: template
+    id: fingerprint_state
+    name: "Fingerabdruck Status"
+
+# Optional sensors
+binary_sensor:
+  - platform: fingerprint_grow
+    id: fingerprint_enrolling
+    name: "Fingerabdruck erlernen"
+
+sensor:
+  - platform: fingerprint_grow
+    fingerprint_count:
+      name: "Fingerabdruckzähler"
+    last_finger_id:
+      name: "Letzte Fingerabdruck-ID"
+    last_confidence:
+      name: "Zuverlässigkeit"
+    status:
+      name: "Fingerabdruck Status"
+    capacity:
+      name: "Fingerabdruck Kapazität"
+    security_level:
+      name: "Sicherheitsstufe"
+
+button:
+  - platform: template
+    name: "Alarm Off"
+    id: button_alarm_off
+    icon: "mdi:emoticon-outline"
+    on_press:
+    - fingerprint_grow.aura_led_control:
+        state: ALWAYS_ON
+        speed: 0
+        color: GREEN
+        count: 0
+  - platform: template
+    name: "Alarm On"
+    id: button_alarm_on
+    icon: "mdi:emoticon-outline"
+    on_press:
+    - fingerprint_grow.aura_led_control:
+        state: ALWAYS_ON
+        speed: 0
+        color: RED
+        count: 0
